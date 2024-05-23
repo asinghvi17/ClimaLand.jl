@@ -48,6 +48,7 @@ import ClimaLand.Parameters as LP
         domain = domain,
         atmos = atmos,
         radiation = rad,
+        boundary_conditions = :StandaloneSnowBoundaryConditions{FT}(),
     )
     drivers = ClimaLand.get_drivers(model)
     @test drivers == (atmos, rad)

@@ -14,6 +14,7 @@ export TOPMODELRunoff,
     NoRunoff,
     SurfaceRunoff,
     AbstractRunoffModel,
+    SiteLevelSurfaceRunoff,
     TOPMODELSubsurfaceRunoff,
     subsurface_runoff_source,
     topmodel_ss_flux,
@@ -61,13 +62,13 @@ struct NoRunoff <: AbstractRunoffModel
 end
 
 """
-    update_runoff!(p, runoff::NoRunoff, _...)
+    update_runoff!(p, runoff::NoRunoff, input, _...)
 
 Updates the runoff variables in the cache `p.soil` in place
 in the case of NoRunoff: sets infiltration = precipitation.
 """
-function update_runoff!(p, runoff::NoRunoff, _...)
-    p.soil.infiltration .= p.drivers.P_liq
+function update_runoff!(p, runoff::NoRunoff, input, _...)
+    p.soil.infiltration .= input
 end
 
 runoff_vars(::NoRunoff) = (:infiltration,)
@@ -174,6 +175,47 @@ struct TOPMODELSubsurfaceRunoff{FT} <: AbstractSoilSource{FT}
     f_over::FT
 end
 
+
+
+struct SiteLevelSurfaceRunoff <: AbstractRunoffModel
+    subsurface_source::Nothing
+    function SiteLevelSurfaceRunoff()
+        return new(nothing)
+    end
+end
+function sitelevel_surface_infiltration(
+    f_ic::FT,
+    input::FT,
+    is_saturated::FT,
+) where {FT}
+    return (1 - is_saturated) * max(f_ic, input)
+end
+
+function update_runoff!(
+    p,
+    runoff::SiteLevelSurfaceRunoff,
+    input,
+    Y,
+    t,
+    model::AbstractSoilModel,
+)
+
+    ic = soil_infiltration_capacity(model, Y, p) # should be non-allocating
+    ϑ_l = Y.soil.ϑ_l
+    FT = eltype(ϑ_l)
+    θ_i = model_agnostic_volumetric_ice_content(Y, FT)
+    @. p.soil.is_saturated = is_saturated(ϑ_l + θ_i, model.parameters.ν)
+    surface_space = model.domain.space.surface
+    is_saturated_sfc =
+        ClimaLand.Domains.top_center_to_surface(p.soil.is_saturated) # a view
+
+    @. p.soil.infiltration =
+        sitelevel_surface_infiltration(ic, input, is_saturated_sfc)
+    @. p.soil.R_s = abs(input .- p.soil.infiltration)
+end
+
+
+
 """
     TOPMODELRunoff{FT <: AbstractFloat, F <: ClimaCore.Fields.Field} <: AbstractRunoffModel
 
@@ -204,7 +246,7 @@ end
 
 
 """
-    update_runoff!(p, runoff::TOPMODELRunoff, Y,t, model::AbstractSoilModel)
+    update_runoff!(p, runoff::TOPMODELRunoff, input, Y,t, model::AbstractSoilModel)
 
 Updates the runoff model variables in place in `p.soil` for the TOPMODELRunoff
 parameterization:
@@ -216,6 +258,7 @@ p.soil.infiltration
 function update_runoff!(
     p,
     runoff::TOPMODELRunoff,
+    input,
     Y,
     t,
     model::AbstractSoilModel,
@@ -239,9 +282,9 @@ function update_runoff!(
         runoff.f_over,
         model.domain.depth - p.soil.h∇,
         ic,
-        precip,
+        input,
     )
-    @. p.soil.R_s = abs(precip - p.soil.infiltration)
+    @. p.soil.R_s = abs(input - p.soil.infiltration)
 
 end
 
