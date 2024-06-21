@@ -10,9 +10,9 @@
 # Soil depth: 50 m
 # Simulation duration: 365 d
 # Timestep: 900 s
-# Timestepper: ARS343
-# Fixed number of iterations: 1
-# Jacobian update: every new timestep
+# Timestepper: ARS111
+# Fixed number of iterations: 6
+# Jacobian update: every new Newton iteration
 # Atmos forcing update: every 3 hours
 import SciMLBase
 import ClimaComms
@@ -363,7 +363,7 @@ function setup_prob(t0, tf, Δt; outdir = outdir, nelements = (101, 15))
     τ_NIR_leaf = FT(0.25)
 
     # Energy Balance model
-    ac_canopy = FT(2.5e4) # this will likely be 10x smaller!
+    ac_canopy = FT(2.5e3)
 
     # Conductance Model
     g1 = FT(141) # Wang et al: 141 sqrt(Pa) for Medlyn model; Natan used 300.
@@ -631,12 +631,12 @@ function setup_and_solve_problem(; greet = false)
     prob, cb = setup_prob(t0, tf, Δt; nelements)
 
     # Define timestepper and ODE algorithm
-    stepper = CTS.ARS343()
+    stepper = CTS.ARS111()
     ode_algo = CTS.IMEXAlgorithm(
         stepper,
         CTS.NewtonsMethod(
-            max_iters = 1,
-            update_j = CTS.UpdateEvery(CTS.NewTimeStep),
+            max_iters = 6,
+            update_j = CTS.UpdateEvery(CTS.NewNewtonIteration),
         ),
     )
     SciMLBase.solve(prob, ode_algo; dt = Δt, callback = cb, adaptive = false)
