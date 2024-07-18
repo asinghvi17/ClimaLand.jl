@@ -1,7 +1,5 @@
 export LandHydrologyModel
 
-struct SnowSoilBoundaryConditions{FT} <: AbstractSnowBoundaryConditions{FT} end
-
 struct AtmosDrivenFluxBCwithSnow{
     A <: AbstractAtmosphericDrivers,
     B <: AbstractRadiativeDrivers,
@@ -106,13 +104,7 @@ function LandHydrologyModel{FT}(;
         sources = sources,
         soil_args...,
     )
-    boundary_conditions_snow = SnowSoilBoundaryConditions{FT}()
-    snow = snow_model_type(;
-        boundary_conditions = boundary_conditions_snow,
-        atmos = atmos,
-        radiation = radiation,
-        snow_args...,
-    )
+    snow = snow_model_type(; atmos = atmos, radiation = radiation, snow_args...)
 
 
     return LandHydrologyModel{FT, typeof(snow), typeof(soil)}(snow, soil)
@@ -233,8 +225,6 @@ boundary_vars(bc::AtmosDrivenFluxBCwithSnow, ::ClimaLand.TopBoundary) = (
     :R_n,
     :top_bc,
     :infiltration,
-    :is_saturated,
-    :R_s,
     :sfc_scratch,
     :subsfc_scratch,
 )
@@ -250,17 +240,7 @@ defined.
 boundary_var_domain_names(
     bc::AtmosDrivenFluxBCwithSnow,
     ::ClimaLand.TopBoundary,
-) = (
-    :surface,
-    :surface,
-    :surface,
-    :surface,
-    :surface,
-    :subsurface,
-    :surface,
-    :surface,
-    :subsurface,
-)
+) = (:surface, :surface, :surface, :surface, :surface, :surface, :subsurface)
 """
     boundary_var_types(
         ::AtmosDrivenFluxBCwithSnow
@@ -278,8 +258,6 @@ boundary_var_types(
     FT,
     FT,
     NamedTuple{(:water, :heat), Tuple{FT, FT}},
-    FT,
-    FT,
     FT,
     FT,
     FT,
@@ -337,53 +315,6 @@ function soil_boundary_fluxes!(
             p.soil.turbulent_fluxes.shf
         ) + p.excess_dUdt
 end
-
-
-function snow_boundary_fluxes!(
-    bc::SnowSoilBoundaryConditions,
-    model::SnowModel{FT},
-    Y,
-    p,
-    t,
-) where {FT}
-    p.snow.turbulent_fluxes .= turbulent_fluxes(model.atmos, model, Y, p, t)
-    p.snow.R_n .= net_radiation(model.radiation, model, Y, p, t)
-    # How does rain affect the below?
-    P_snow = p.drivers.P_snow
-
-    # Heaviside function because we cannot change the water content of the snow by
-    # sublimation, evap, melting, or rain
-    # unless there is already snow on the ground. 
-    @. p.snow.total_water_flux =
-        -P_snow +
-        (-p.snow.turbulent_fluxes.vapor_flux + p.snow.water_runoff) *
-        heaviside(Y.snow.S - eps(FT))
-
-    # I think we want dU/dt to include energy of falling snow.
-    # otherwise snow can fall but energy wont change
-    # We are assuming that the sensible heat portion of snow is negligible.
-    _LH_f0 = FT(LP.LH_f0(model.parameters.earth_param_set))
-    _ρ_liq = FT(LP.ρ_cloud_liq(model.parameters.earth_param_set))
-    ρe_falling_snow = -_LH_f0 * _ρ_liq # per unit vol of liquid water
-
-    @. p.snow.total_energy_flux =
-        -P_snow * ρe_falling_snow +
-        (
-            -p.snow.turbulent_fluxes.lhf - p.snow.turbulent_fluxes.shf -
-            p.snow.R_n + p.snow.energy_runoff
-        ) * heaviside(Y.snow.S - eps(FT))
-
-    @. p.snow.applied_water_flux =
-        Snow.clip_dSdt(Y.snow.S, p.snow.total_water_flux, model.parameters.Δt)
-    @. p.snow.applied_energy_flux = Snow.clip_dUdt(
-        Y.snow.U,
-        Y.snow.S,
-        p.snow.total_energy_flux,
-        p.snow.total_water_flux,
-        model.parameters.Δt,
-    )
-end
-
 
 function ClimaLand.get_drivers(model::LandHydrologyModel)
     return (model.snow.atmos, model.snow.radiation)
