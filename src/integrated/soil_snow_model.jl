@@ -210,8 +210,12 @@ function make_update_boundary_fluxes(
             (p.snow.total_energy_flux - p.snow.applied_energy_flux) *
             p.snow.snow_cover_fraction
         update_soil_bf!(p, Y, t)
-        @. p.atmos_energy_flux = FT(0) # fill in later
-        @. p.atmos_water_flux = FT(0) # fill in later
+        @. p.atmos_energy_flux =
+            p.snow.applied_energy_flux * p.snow.snow_cover_fraction +
+            p.soil.top_bc.heat
+        @. p.atmos_water_flux =
+            p.snow.applied_water_flux * p.snow.snow_cover_fraction +
+            p.soil.top_bc.water
 
     end
     return update_boundary_fluxes!
@@ -219,15 +223,11 @@ end
 
 
 ### Extensions of existing functions to account for prognostic soil/snow
-boundary_vars(bc::AtmosDrivenFluxBCwithSnow, ::ClimaLand.TopBoundary) = (
-    :turbulent_fluxes,
-    :ice_frac,
-    :R_n,
-    :top_bc,
-    :infiltration,
-    :sfc_scratch,
-    :subsfc_scratch,
-)
+# It would be good to revisit, because these are duplicates of the methods
+# for AtmosDrivenFluxBC. They should use the same default
+# This would require an AbstractAtmosDrivenFluxBC perhaps.
+boundary_vars(bc::AtmosDrivenFluxBCwithSnow, ::ClimaLand.TopBoundary) =
+    (:turbulent_fluxes, :ice_frac, :R_n, :top_bc, :infiltration, :sfc_scratch)
 
 """
     boundary_var_domain_names(::AtmosDrivenFluxBCwithSnow,
@@ -240,7 +240,7 @@ defined.
 boundary_var_domain_names(
     bc::AtmosDrivenFluxBCwithSnow,
     ::ClimaLand.TopBoundary,
-) = (:surface, :surface, :surface, :surface, :surface, :surface, :subsurface)
+) = (:surface, :surface, :surface, :surface, :surface, :surface)
 """
     boundary_var_types(
         ::AtmosDrivenFluxBCwithSnow
@@ -258,7 +258,6 @@ boundary_var_types(
     FT,
     FT,
     NamedTuple{(:water, :heat), Tuple{FT, FT}},
-    FT,
     FT,
     FT,
 )
