@@ -15,7 +15,6 @@ using ClimaLand:
 
 import ClimaLand:
     make_update_aux,
-    make_update_boundary_fluxes,
     make_compute_exp_tendency,
     make_update_boundary_fluxes,
     prognostic_vars,
@@ -31,11 +30,7 @@ import ClimaLand:
     surface_albedo,
     surface_emissivity,
     get_drivers
-export SnowParameters,
-    SnowModel,
-    AbstractSnowBoundaryConditions,
-    snow_boundary_fluxes!,
-    StandaloneSnowBoundaryConditions
+export SnowParameters, SnowModel
 
 """
     AbstractSnowModel{FT} <: ClimaLand.AbstractExpModel{FT}
@@ -45,6 +40,7 @@ Currently, the only supported concrete example is called `SnowModel`
 and is used as a bulk snow model.
 """
 abstract type AbstractSnowModel{FT} <: ClimaLand.AbstractExpModel{FT} end
+
 
 """
     SnowParameters{FT <: AbstractFloat, PSE}
@@ -147,7 +143,6 @@ struct SnowModel{
     PS <: SnowParameters{FT},
     ATM <: AbstractAtmosphericDrivers{FT},
     RAD <: AbstractRadiativeDrivers{FT},
-    BC <: AbstractSnowBoundaryConditions{FT},
     D,
 } <: AbstractSnowModel{FT}
     "Parameters required by the snow model"
@@ -156,8 +151,6 @@ struct SnowModel{
     atmos::ATM
     "The radiation drivers: Prescribed or Coupled"
     radiation::RAD
-    "Boundary conditions: standalone or integrated land model"
-    boundary_conditions::BC
     "The domain of the model"
     domain::D
 end
