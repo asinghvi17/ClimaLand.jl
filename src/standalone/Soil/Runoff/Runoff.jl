@@ -112,6 +112,7 @@ end
     update_runoff!(
         p,
         runoff::SurfaceRunoff,
+        input,
         Y,
         t,
         model::AbstractSoilModel,
@@ -128,6 +129,7 @@ p.soil.infiltration
 function update_runoff!(
     p,
     runoff::SurfaceRunoff,
+    input,
     Y,
     t,
     model::AbstractSoilModel,
@@ -142,9 +144,8 @@ function update_runoff!(
     is_saturated_sfc =
         ClimaLand.Domains.top_center_to_surface(p.soil.is_saturated) # a view
 
-    @. p.soil.infiltration =
-        surface_infiltration(ic, p.drivers.P_liq, is_saturated_sfc)
-    @. p.soil.R_s = abs(p.drivers.P_liq .- p.soil.infiltration)
+    @. p.soil.infiltration = surface_infiltration(ic, input, is_saturated_sfc)
+    @. p.soil.R_s = abs(input .- p.soil.infiltration)
 end
 
 runoff_vars(::SurfaceRunoff) =

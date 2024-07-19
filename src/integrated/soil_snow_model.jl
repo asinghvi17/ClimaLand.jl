@@ -1,10 +1,22 @@
 export LandHydrologyModel
 
+"""
+    AtmosDrivenFluxBCwithSnow{
+        A <: AbstractAtmosphericDrivers,
+        B <: AbstractRadiativeDrivers,
+        R <: ClimaLand.Soil.Runoff.AbstractRunoffModel,
+    } <: ClimaLand.Soil.AbstractAtmosDrivenFluxBC
+
+A type of Soil.AbstractAtmosDrivenFluxBC for use when snow
+changes the boundary conditions of the soil, by modifying
+the fraction of the surface exposed to the atmosphere
+and by providing snowmelt as additional surface infiltration.
+"""
 struct AtmosDrivenFluxBCwithSnow{
     A <: AbstractAtmosphericDrivers,
     B <: AbstractRadiativeDrivers,
     R <: ClimaLand.Soil.Runoff.AbstractRunoffModel,
-} <: ClimaLand.Soil.AbstractEnergyHydrologyBC
+} <: ClimaLand.Soil.AbstractAtmosDrivenFluxBC
     "The atmospheric conditions driving the model"
     atmos::A
     "The radiative fluxes driving the model"
@@ -115,10 +127,10 @@ function ClimaLand.Soil.sublimation_source(bc::AtmosDrivenFluxBCwithSnow)
 end
 
 """
-    SoilSublimation{FT} <: AbstractSoilSource{FT}
+    SoilSublimationwithSnow{FT} <: AbstractSoilSource{FT}
 
 Soil Sublimation source type. Used to defined a method
-of `ClimaLand.source!` for soil sublimation.
+of `ClimaLand.source!` for soil sublimation with snow present.
 """
 struct SoilSublimationwithSnow{FT} <: ClimaLand.Soil.AbstractSoilSource{FT} end
 
@@ -223,47 +235,9 @@ end
 
 
 ### Extensions of existing functions to account for prognostic soil/snow
-# It would be good to revisit, because these are duplicates of the methods
-# for AtmosDrivenFluxBC. They should use the same default
-# This would require an AbstractAtmosDrivenFluxBC perhaps.
-boundary_vars(bc::AtmosDrivenFluxBCwithSnow, ::ClimaLand.TopBoundary) =
-    (:turbulent_fluxes, :ice_frac, :R_n, :top_bc, :infiltration, :sfc_scratch)
-
-"""
-    boundary_var_domain_names(::AtmosDrivenFluxBCwithSnow,
-                              ::ClimaLand.TopBoundary)
-
-An extension of the `boundary_var_domain_names` method for AtmosDrivenFluxBC. This
-specifies the part of the domain on which the additional variables should be
-defined.
-"""
-boundary_var_domain_names(
-    bc::AtmosDrivenFluxBCwithSnow,
-    ::ClimaLand.TopBoundary,
-) = (:surface, :surface, :surface, :surface, :surface, :surface)
-"""
-    boundary_var_types(
-        ::AtmosDrivenFluxBCwithSnow
-    ) where {FT}
-
-An extension of the `boundary_var_types` method for AtmosDrivenFluxBC. This
-specifies the type of the additional variables.
-"""
-boundary_var_types(
-    model::EnergyHydrology{FT},
-    bc::AtmosDrivenFluxBCwithSnow,
-    ::ClimaLand.TopBoundary,
-) where {FT} = (
-    NamedTuple{(:lhf, :shf, :vapor_flux, :r_ae), Tuple{FT, FT, FT, FT}},
-    FT,
-    FT,
-    NamedTuple{(:water, :heat), Tuple{FT, FT}},
-    FT,
-    FT,
-)
 """
     soil_boundary_fluxes!(
-        bc::AtmosDrivenFluxBCwithSnow,
+A        bc::AtmosDrivenFluxBCwithSnow,
         boundary::ClimaLand.TopBoundary,
         soil::EnergyHydrology{FT},
         Δz,
