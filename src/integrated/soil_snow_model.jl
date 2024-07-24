@@ -122,7 +122,9 @@ function LandHydrologyModel{FT}(;
     return LandHydrologyModel{FT, typeof(snow), typeof(soil)}(snow, soil)
 end
 
-function ClimaLand.Soil.sublimation_source(bc::AtmosDrivenFluxBCwithSnow)
+function ClimaLand.Soil.sublimation_source(
+    bc::AtmosDrivenFluxBCwithSnow{FT},
+) where {FT}
     return SoilSublimationwithSnow{FT}()
 end
 
