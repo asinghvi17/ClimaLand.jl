@@ -796,6 +796,8 @@ function sublimation_source(bc::AbstractEnergyHydrologyBC)
     nothing
 end
 
-function sublimation_source(bc::AtmosDrivenFluxBC{FT}) where {FT}
+function sublimation_source(
+    bc::AtmosDrivenFluxBC{AbstractAtmosphericDrivers{FT}},
+) where {FT}
     return SoilSublimation{FT}()
 end

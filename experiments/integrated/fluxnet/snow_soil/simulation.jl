@@ -234,5 +234,65 @@ axislegend(ax4, position = :rt)
 CairoMakie.save(joinpath(savedir, "results.png"), fig)
 
 # Assess conservation
+_ρ_i = FT(LP.ρ_cloud_ice(earth_param_set))
+_ρ_l = FT(LP.ρ_cloud_liq(earth_param_set))
+fig = Figure(size = (1600, 1200), fontsize = 26)
+ax1 = Axis(fig[2, 1], ylabel = "ΔEnergy (J/A)", xlabel = "Days")
+delta_energy_expected =
+    cumsum(
+        -1 .* [
+            parent(
+                sv.saveval[k].atmos_energy_flux .-
+                sv.saveval[k].soil.bottom_bc.heat,
+            )[end] for k in 1:1:length(sv.t)
+        ],
+    ) * (sv.t[2] - sv.t[1])
+energy_measured = [
+    sum(sol.u[k].soil.ρe_int) + parent(sol.u[k].snow.U)[end] for
+    k in 1:1:length(sv.t)
+]
+delta_water_expected =
+    cumsum(
+        -1 .* [
+            parent(
+                sv.saveval[k].atmos_water_flux .-
+                sv.saveval[k].soil.bottom_bc.water,
+            )[end] for k in 1:1:length(sv.t)
+        ],
+    ) * (sv.t[2] - sv.t[1])
+water_measured = [
+    sum(sol.u[k].soil.ϑ_l) +
+    sum(sol.u[k].soil.θ_i) * _ρ_i / _ρ_l +
+    parent(sol.u[k].snow.S)[end] for k in 1:1:length(sv.t)
+]
+lines!(ax1, daily, energy_measured .- energy_measured[1], label = "Simulated")
+lines!(ax1, daily, delta_energy_expected, label = "Expected")
+axislegend(ax1, position = :rt)
 
-# Land - atmos fluxes
+# Temp
+ax4 = Axis(fig[1, 1], ylabel = "ΔWater (m)")
+hidexdecorations!(ax4, ticks = false)
+lines!(ax4, daily, water_measured .- water_measured[1], label = "Simulated")
+
+lines!(ax4, daily, delta_water_expected, label = "Expected")
+axislegend(ax4, position = :rt)
+
+
+ax3 = Axis(fig[2, 2], ylabel = "ΔEnergy/Energy", xlabel = "Days")
+lines!(
+    ax3,
+    daily,
+    (energy_measured .- energy_measured[1] .- delta_energy_expected) ./
+    mean(energy_measured),
+)
+
+ax2 = Axis(fig[1, 2], ylabel = "ΔWater/Water")
+hidexdecorations!(ax2, ticks = false)
+lines!(
+    ax2,
+    daily,
+    (water_measured .- water_measured[1] .- delta_water_expected) ./
+    mean(water_measured),
+)
+
+CairoMakie.save(joinpath(savedir, "results_conservation.png"), fig)

@@ -123,7 +123,7 @@ function LandHydrologyModel{FT}(;
 end
 
 function ClimaLand.Soil.sublimation_source(
-    bc::AtmosDrivenFluxBCwithSnow{FT},
+    bc::AtmosDrivenFluxBCwithSnow{AbstractAtmosphericDrivers{FT}},
 ) where {FT}
     return SoilSublimationwithSnow{FT}()
 end
@@ -173,8 +173,12 @@ end
 The names of the additional auxiliary variables that are
 included in the integrated Soil-Snow model.
 """
-lsm_aux_vars(m::LandHydrologyModel) =
-    (:excess_dSdt, :excess_dUdt, :atmos_energy_flux, :atmos_water_flux)
+lsm_aux_vars(m::LandHydrologyModel) = (
+    :excess_water_flux,
+    :excess_heat_flux,
+    :atmos_energy_flux,
+    :atmos_water_flux,
+)
 """
     lsm_aux_types(m::LandHydrologyModel)
 
@@ -217,19 +221,35 @@ function make_update_boundary_fluxes(
     function update_boundary_fluxes!(p, Y, t)
         update_snow_bf!(p, Y, t)
         # Now we have access to the actual applied and initially computed fluxes for snow
-        @. p.excess_dSdt =
+        # Small concern that we are taking Psnow *snow cover fraction here?
+        @. p.excess_water_flux =
             (p.snow.total_water_flux - p.snow.applied_water_flux) *
             p.snow.snow_cover_fraction
-        @. p.excess_dUdt =
+        @. p.excess_heat_flux =
             (p.snow.total_energy_flux - p.snow.applied_energy_flux) *
             p.snow.snow_cover_fraction
         update_soil_bf!(p, Y, t)
+        _LH_f0 = FT(LP.LH_f0(land.soil.parameters.earth_param_set))
+        _ρ_liq = FT(LP.ρ_cloud_liq(land.soil.parameters.earth_param_set))
+        ρe_falling_snow = -_LH_f0 * _ρ_liq # per unit vol of liquid water
         @. p.atmos_energy_flux =
-            p.snow.applied_energy_flux * p.snow.snow_cover_fraction +
-            p.soil.top_bc.heat
+            (1 - p.snow.snow_cover_fraction) * (
+                p.soil.turbulent_fluxes.lhf +
+                p.soil.turbulent_fluxes.shf +
+                p.soil.R_n
+            ) +
+            p.snow.snow_cover_fraction * (
+                p.snow.turbulent_fluxes.lhf +
+                p.snow.turbulent_fluxes.shf +
+                p.snow.R_n
+            ) +
+            p.drivers.P_snow * ρe_falling_snow
         @. p.atmos_water_flux =
-            p.snow.applied_water_flux * p.snow.snow_cover_fraction +
-            p.soil.top_bc.water
+            p.drivers.P_snow +
+            p.drivers.P_liq +
+            (1 - p.snow.snow_cover_fraction) *
+            p.soil.turbulent_fluxes.vapor_flux +
+            p.snow.snow_cover_fraction * p.snow.turbulent_fluxes.vapor_flux
 
     end
     return update_boundary_fluxes!
@@ -239,7 +259,7 @@ end
 ### Extensions of existing functions to account for prognostic soil/snow
 """
     soil_boundary_fluxes!(
-A        bc::AtmosDrivenFluxBCwithSnow,
+        bc::AtmosDrivenFluxBCwithSnow,
         boundary::ClimaLand.TopBoundary,
         soil::EnergyHydrology{FT},
         Δz,
@@ -269,7 +289,7 @@ function soil_boundary_fluxes!(
         p,
         bc.runoff,
         p.drivers.P_liq .+ p.snow.water_runoff .* p.snow.snow_cover_fraction .+
-        p.excess_dSdt,
+        p.excess_water_flux,
         Y,
         t,
         soil,
@@ -280,15 +300,14 @@ function soil_boundary_fluxes!(
         p.soil.infiltration +
         (1 - p.snow.snow_cover_fraction) *
         p.soil.turbulent_fluxes.vapor_flux *
-        (1 - p.soil.ice_frac) +
-        p.excess_dSdt
+        (1 - p.soil.ice_frac)
     T_sfc = ClimaLand.Domains.top_center_to_surface(p.soil.T)
     @. p.soil.top_bc.heat =
         (1 - p.snow.snow_cover_fraction) * (
             p.soil.R_n +
             p.soil.turbulent_fluxes.lhf +
             p.soil.turbulent_fluxes.shf
-        ) + p.excess_dUdt
+        ) + p.excess_heat_flux
 end
 
 function ClimaLand.get_drivers(model::LandHydrologyModel)
