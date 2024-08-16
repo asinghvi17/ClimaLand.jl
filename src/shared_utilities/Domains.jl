@@ -921,7 +921,18 @@ function get_additional_domain_fields(subsurface_space)
     )
     return fields
 end
-
+# These may change with topography/bedrock depth!
+depth(domain::SphericalShell) = domain.depth
+depth(domain::HybridBox) =
+    (
+        domain.space.subsurface.grid.vertical_grid.topology.mesh.domain.coord_max -
+        domain.space.subsurface.grid.vertical_grid.topology.mesh.domain.coord_min
+    ).z
+depth(domain::Column) =
+    (
+        domain.space.subsurface.grid.topology.mesh.domain.coord_max -
+        domain.space.subsurface.grid.topology.mesh.domain.coord_min
+    ).z
 
 export AbstractDomain
 export Column, Plane, HybridBox, Point, SphericalShell, SphericalSurface
