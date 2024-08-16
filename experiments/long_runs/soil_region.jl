@@ -55,18 +55,22 @@ diagnostics_outdir = joinpath(root_path, "global_diagnostics")
 outdir =
     ClimaUtilities.OutputPathGenerator.generate_output_path(diagnostics_outdir)
 
-function setup_prob(t0, tf, Δt; outdir = outdir, nelements = (101, 15))
+function setup_prob(t0, tf, Δt; outdir = outdir, nelements = (20,20, 15))
 
     earth_param_set = LP.LandParameters(FT)
-    radius = FT(6378.1e3)
     depth = FT(50)
-    domain = ClimaLand.Domains.SphericalShell(;
-        radius = radius,
-        depth = depth,
-        nelements = nelements,
-        npolynomial = 1,
-        dz_tuple = FT.((10.0, 0.05)),
-    )
+    center_long, center_lat = FT(0), FT(20)
+    # Half size of the grid in meters
+    delta_m = FT(50_000)
+    domain = ClimaLand.Domains.HybridBox(;
+                                         xlim = (delta_m, delta_m),
+                                         ylim = (delta_m, delta_m),
+                                         zlim = (-depth, FT(0))
+                                         nelements = nelements,
+                                         npolynomial = 1,
+                                         longlat = (center_long, center_lat),
+                                         dz_tuple = FT.((10.0, 0.05)),
+                                         )
     surface_space = domain.space.surface
     subsurface_space = domain.space.subsurface
 
