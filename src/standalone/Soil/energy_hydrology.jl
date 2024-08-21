@@ -910,13 +910,13 @@ function turbulent_fluxes(
         K_sat_sfc,
         hydrology_cm_sfc.S_c,
     ) # allocates
-    K_sfc = p.soil.sfc_scratch
-    ClimaLand.Domains.linear_interpolation_to_surface!(
-        K_sfc,
-        p.soil.K,
-        model.domain.fields.z,
-        model.domain.fields.Δz_top,
-    )
+    K_sfc = ClimaLand.Domains.top_center_to_surface(p.soil.K)#p.soil.sfc_scratch
+#    ClimaLand.Domains.linear_interpolation_to_surface!(
+#        K_sfc,
+#        p.soil.K,
+#        model.domain.fields.z,
+#        model.domain.fields.Δz_top,
+#    )
     return soil_turbulent_fluxes_at_a_point.(
         T_sfc,
         q_sfc,
