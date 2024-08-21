@@ -941,6 +941,8 @@ end
                                 ρ_sfc::FT,
                                 h_sfc::FT,
                                 d_sfc::FT,
+                                K_sfc::FT,
+                                K_c::FT,
                                 ts_in,
                                 u::FT,
                                 h::FT,
