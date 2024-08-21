@@ -884,3 +884,151 @@ function ClimaLand.get_drivers(model::EnergyHydrology)
         return ()
     end
 end
+
+
+
+function turbulent_fluxes(
+    atmos::PrescribedAtmosphere,
+    model::EnergyHydrology,
+    Y::ClimaCore.Fields.FieldVector,
+    p::NamedTuple,
+    t,
+)
+    T_sfc = ClimaLand.surface_temperature(model, Y, p, t)
+    ρ_sfc = ClimaLand.surface_air_density(atmos, model, Y, p, t, T_sfc)
+    q_sfc = ClimaLand.surface_specific_humidity(model, Y, p, T_sfc, ρ_sfc)
+    h_sfc = ClimaLand.surface_height(model, Y, p)
+    d_sfc = ClimaLand.displacement_height(model, Y, p)
+    u_air = p.drivers.u
+    h_air = atmos.h
+    (; K_sat, hydrology_cm) = model.parameters
+
+    hydrology_cm_sfc = ClimaLand.Domains.top_center_to_surface(hydrology_cm)
+    K_sat_sfc = ClimaLand.Domains.top_center_to_surface(K_sat)
+    K_c = hydraulic_conductivity(
+        hydrology_cm_sfc,
+        K_sat_sfc,
+        hydrology_cm_sfc.S_c,
+    ) # allocates
+    K_sfc = p.soil.sfc_scratch
+    ClimaLand.Domains.linear_interpolation_to_surface!(
+        K_sfc,
+        p.soil.K,
+        model.domain.fields.z,
+        model.domain.fields.Δz_top,
+    )
+    return soil_turbulent_fluxes_at_a_point.(
+        T_sfc,
+        q_sfc,
+        ρ_sfc,
+        h_sfc,
+        d_sfc,
+        K_sfc,
+        K_c,
+        p.drivers.thermal_state,
+        u_air,
+        h_air,
+        atmos.gustiness,
+        model.parameters.z_0m,
+        model.parameters.z_0b,
+        Ref(model.parameters.earth_param_set),
+    )
+end
+
+"""
+    soil_turbulent_fluxes_at_a_point(T_sfc::FT,
+                                q_sfc::FT,
+                                ρ_sfc::FT,
+                                h_sfc::FT,
+                                d_sfc::FT,
+                                ts_in,
+                                u::FT,
+                                h::FT,
+                                gustiness::FT,
+                                z_0m::FT,
+                                z_0b::FT,
+                                earth_param_set::EP,
+                               ) where {FT <: AbstractFloat, P}
+
+Computes turbulent surface fluxes at a point on a surface given
+(1) the surface temperature (T_sfc), specific humidity (q_sfc),
+    and air density (ρ_sfc),
+(2) Other surface properties, such as the factor
+    β_sfc  which scales the evaporation from the potential rate
+    (used in bucket models), and the surface resistance r_sfc (used
+    in more complex land models), and the topographical height of the surface (h_sfc)
+(3) the roughness lengths `z_0m, z_0b`, and the Earth parameter set for the model
+    `earth_params`.
+(4) the prescribed atmospheric state, `ts_in`, u, h the height
+    at which these measurements are made, and the gustiness parameter (m/s).
+(5) the displacement height for the model d_sfc
+
+This returns an energy flux and a liquid water volume flux, stored in
+a tuple with self explanatory keys.
+"""
+function soil_turbulent_fluxes_at_a_point(
+    T_sfc::FT,
+    q_sfc::FT,
+    ρ_sfc::FT,
+    h_sfc::FT,
+    d_sfc::FT,
+    K_sfc::FT,
+    K_c::FT,
+    ts_in,
+    u::FT,
+    h::FT,
+    gustiness::FT,
+    z_0m::FT,
+    z_0b::FT,
+    earth_param_set::EP,
+) where {FT <: AbstractFloat, EP}
+    thermo_params = LP.thermodynamic_parameters(earth_param_set)
+    ts_sfc = Thermodynamics.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
+
+    # SurfaceFluxes.jl expects a relative difference between where u = 0
+    # and the atmosphere height. Here, we assume h and h_sfc are measured
+    # relative to a common reference. Then d_sfc + h_sfc + z_0m is the apparent
+    # source of momentum, and
+    # Δh ≈ h - d_sfc - h_sfc is the relative height difference between the
+    # apparent source of momentum and the atmosphere height.
+
+    # In this we have neglected z_0m and z_0b (i.e. assumed they are small
+    # compared to Δh).
+    state_sfc = SurfaceFluxes.StateValues(FT(0), SVector{2, FT}(0, 0), ts_sfc)
+    state_in = SurfaceFluxes.StateValues(
+        h - d_sfc - h_sfc,
+        SVector{2, FT}(u, 0),
+        ts_in,
+    )
+
+    # State containers
+    sc = SurfaceFluxes.ValuesOnly(
+        state_in,
+        state_sfc,
+        z_0m,
+        z_0b,
+        gustiness = gustiness,
+    )
+    surface_flux_params = LP.surface_fluxes_parameters(earth_param_set)
+    conditions = SurfaceFluxes.surface_conditions(
+        surface_flux_params,
+        sc;
+        tol_neutral = SFP.cp_d(surface_flux_params) / 100000,
+    )
+    _LH_v0::FT = LP.LH_v0(earth_param_set)
+    _ρ_liq::FT = LP.ρ_cloud_liq(earth_param_set)
+
+    cp_m::FT = Thermodynamics.cp_m(thermo_params, ts_in)
+    T_in::FT = Thermodynamics.air_temperature(thermo_params, ts_in)
+    ΔT = T_in - T_sfc
+    r_ae::FT = 1 / (conditions.Ch * SurfaceFluxes.windspeed(sc))
+    ρ_air::FT = Thermodynamics.air_density(thermo_params, ts_in)
+
+    E0::FT = SurfaceFluxes.evaporation(surface_flux_params, sc, conditions.Ch)
+    x = 4 * K_sfc * (1 + E0 / (4 * K_c))
+    E = E0 * x / (E0 + x)
+    Ẽ = E / _ρ_liq
+    H = -ρ_air * cp_m * ΔT / r_ae
+    LH = _LH_v0 * E
+    return (lhf = LH, shf = H, vapor_flux = Ẽ, r_ae = r_ae)
+end
