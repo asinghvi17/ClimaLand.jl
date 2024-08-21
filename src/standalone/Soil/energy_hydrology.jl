@@ -675,9 +675,9 @@ function ClimaLand.source!(
     _ρ_l = FT(LP.ρ_cloud_liq(model.parameters.earth_param_set))
     z = model.domain.fields.z
     Δz_top = model.domain.fields.Δz_top # this returns the center-face distance, not layer thickness
-    @. dY.soil.θ_i +=
-        -p.soil.turbulent_fluxes.vapor_flux * p.soil.ice_frac * _ρ_l / _ρ_i *
-        heaviside(z + 2 * Δz_top) # only apply to top layer, recall that z is negative
+    @. dY.soil.θ_i += FT(0)
+       # -p.soil.turbulent_fluxes.vapor_flux * p.soil.ice_frac * _ρ_l / _ρ_i *
+        #heaviside(z + 2 * Δz_top) # only apply to top layer, recall that z is negative
 end
 
 ## The functions below are required to be defined
