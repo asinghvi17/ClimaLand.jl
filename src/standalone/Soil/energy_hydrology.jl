@@ -675,9 +675,9 @@ function ClimaLand.source!(
     _ρ_l = FT(LP.ρ_cloud_liq(model.parameters.earth_param_set))
     z = model.domain.fields.z
     Δz_top = model.domain.fields.Δz_top # this returns the center-face distance, not layer thickness
-    @. dY.soil.θ_i += FT(0)
-       # -p.soil.turbulent_fluxes.vapor_flux * p.soil.ice_frac * _ρ_l / _ρ_i *
-        #heaviside(z + 2 * Δz_top) # only apply to top layer, recall that z is negative
+    @. dY.soil.θ_i +=
+        -p.soil.turbulent_fluxes.vapor_flux_ice * _ρ_l / _ρ_i *
+        heaviside(z + 2 * Δz_top) # only apply to top layer, recall that z is negative
 end
 
 ## The functions below are required to be defined
@@ -901,30 +901,31 @@ function turbulent_fluxes(
     d_sfc = ClimaLand.displacement_height(model, Y, p)
     u_air = p.drivers.u
     h_air = atmos.h
-    (; K_sat, hydrology_cm) = model.parameters
 
+    (; K_sat, ν, θ_r, hydrology_cm) = model.parameters
     hydrology_cm_sfc = ClimaLand.Domains.top_center_to_surface(hydrology_cm)
     K_sat_sfc = ClimaLand.Domains.top_center_to_surface(K_sat)
-    K_c = hydraulic_conductivity.(
-        hydrology_cm_sfc,
-        K_sat_sfc,
-        hydrology_cm_sfc.S_c,
-    ) # allocates
-    K_sfc = ClimaLand.Domains.top_center_to_surface(p.soil.K)#p.soil.sfc_scratch
-#    ClimaLand.Domains.linear_interpolation_to_surface!(
-#        K_sfc,
-#        p.soil.K,
-#        model.domain.fields.z,
-#        model.domain.fields.Δz_top,
-#    )
+    θ_i_sfc = ClimaLand.Domains.top_center_to_surface(Y.soil.θ_i)
+    ν_sfc = ClimaLand.Domains.top_center_to_surface(ν)
+    θ_r_sfc = ClimaLand.Domains.top_center_to_surface(θ_r)
+    log10_K_sfc = p.soil.sfc_scratch
+    ClimaLand.Domains.linear_interpolation_to_surface!(
+        log10_K_sfc,
+        log10.(p.soil.K),#allocates
+        model.domain.fields.z,
+        model.domain.fields.Δz_top,
+    )
+    S_i_sfc = @. (θ_i_sfc - θ_r_sfc) / (ν_sfc - θ_r_sfc)
     return soil_turbulent_fluxes_at_a_point.(
         T_sfc,
         q_sfc,
         ρ_sfc,
         h_sfc,
         d_sfc,
-        K_sfc,
-        K_c,
+        S_i_sfc,
+        hydrology_cm_sfc,
+        K_sat_sfc,
+        log10_K_sfc,
         p.drivers.thermal_state,
         u_air,
         h_air,
@@ -941,8 +942,9 @@ end
                                 ρ_sfc::FT,
                                 h_sfc::FT,
                                 d_sfc::FT,
-                                K_sfc::FT,
-                                K_c::FT,
+        hydrology_cm_sfc,
+        K_sat_sfc,
+        log10_K_sfc,
                                 ts_in,
                                 u::FT,
                                 h::FT,
@@ -974,8 +976,10 @@ function soil_turbulent_fluxes_at_a_point(
     ρ_sfc::FT,
     h_sfc::FT,
     d_sfc::FT,
-    K_sfc::FT,
-    K_c::FT,
+    S_i_sfc::FT,
+    hydrology_cm_sfc,
+    K_sat_sfc::FT,
+    log10_K_sfc::FT,
     ts_in,
     u::FT,
     h::FT,
@@ -1027,10 +1031,23 @@ function soil_turbulent_fluxes_at_a_point(
     ρ_air::FT = Thermodynamics.air_density(thermo_params, ts_in)
 
     E0::FT = SurfaceFluxes.evaporation(surface_flux_params, sc, conditions.Ch)
+    K_sfc = FT(10)^log10_K_sfc
+    K_c = hydraulic_conductivity(
+        hydrology_cm_sfc,
+        K_sat_sfc,
+        hydrology_cm_sfc.S_c,
+    )
     x = 4 * K_sfc * (1 + E0 / (4 * K_c))
     E = E0 * x / (E0 + x)
     Ẽ = E / _ρ_liq
     H = -ρ_air * cp_m * ΔT / r_ae
-    LH = _LH_v0 * E
-    return (lhf = LH, shf = H, vapor_flux = Ẽ, r_ae = r_ae)
+    β_i = S_i_sfc^2
+    LH = _LH_v0 * (E + β_i * E0)
+    return (
+        lhf = LH,
+        shf = H,
+        vapor_flux_liq = Ẽ,
+        r_ae = r_ae,
+        vapor_flux_ice = β_i * E0 / _ρ_liq,
+    )
 end
