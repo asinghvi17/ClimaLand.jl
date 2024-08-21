@@ -905,7 +905,7 @@ function turbulent_fluxes(
 
     hydrology_cm_sfc = ClimaLand.Domains.top_center_to_surface(hydrology_cm)
     K_sat_sfc = ClimaLand.Domains.top_center_to_surface(K_sat)
-    K_c = hydraulic_conductivity(
+    K_c = hydraulic_conductivity.(
         hydrology_cm_sfc,
         K_sat_sfc,
         hydrology_cm_sfc.S_c,
