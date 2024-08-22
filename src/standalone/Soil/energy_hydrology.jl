@@ -711,6 +711,8 @@ function ClimaLand.surface_temperature(
     return ClimaLand.Domains.top_center_to_surface(p.soil.T)
 end
 
+"""
+"""
 function ClimaLand.surface_evaporative_scaling(model::EnergyHydrology{FT}, Y, p) where {FT}
     (; ν, θ_r, d_ds, earth_param_set, hydrology_cm) = model.parameters
     θ_l_sfc = p.soil.sfc_scratch
