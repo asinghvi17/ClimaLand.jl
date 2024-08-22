@@ -915,7 +915,7 @@ function turbulent_fluxes(
         model.domain.fields.z,
         model.domain.fields.Δz_top,
     )
-    S_i_sfc = @. (θ_i_sfc - θ_r_sfc) / (ν_sfc - θ_r_sfc)
+    S_i_sfc = @. θ_i_sfc / (ν_sfc - θ_r_sfc)
     return soil_turbulent_fluxes_at_a_point.(
         T_sfc,
         q_sfc,
