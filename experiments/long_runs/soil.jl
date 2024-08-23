@@ -439,7 +439,7 @@ end
 function setup_and_solve_problem(; greet = false)
 
     t0 = 0.0
-    tf = 60 * 60.0 * 24 * 60 # keep short until it runs! * 365
+    tf = 60 * 60.0 * 24 * 180 # keep short until it runs! * 365
     Δt = 900.0
     nelements = (101, 15)
     if greet
@@ -472,7 +472,8 @@ short_names = ["swc", "si", "sie"]
 for short_name in short_names
     var = get(simdir; short_name)
     times = ClimaAnalysis.times(var)
-    for t in times
+    id = 1:10:length(times)
+    for t in times[id]
         var = get(simdir; short_name)
         fig = CairoMakie.Figure(size = (800, 600))
         kwargs = ClimaAnalysis.has_altitude(var) ? Dict(:z => 1) : Dict()
