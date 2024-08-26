@@ -235,13 +235,7 @@ import ClimaParams
         # check that this is updated correctly:
         # @test p.canopy.autotrophic_respiration.Ra ==
         exp_tendency!(dY, Y, p, t0)
-        turb_fluxes = ClimaLand.Canopy.canopy_turbulent_fluxes(
-            canopy.atmos,
-            canopy,
-            Y,
-            p,
-            t0,
-        )
+        turb_fluxes = ClimaLand.turbulent_fluxes(canopy.atmos, canopy, Y, p, t0)
 
         @test p.canopy.hydraulics.fa.:1 == turb_fluxes.vapor_flux
         @test p.canopy.energy.shf == turb_fluxes.shf
@@ -729,13 +723,7 @@ end
         exp_tendency! = make_exp_tendency(canopy)
         dY = similar(Y)
         exp_tendency!(dY, Y, p, t0)
-        turb_fluxes = ClimaLand.Canopy.canopy_turbulent_fluxes(
-            canopy.atmos,
-            canopy,
-            Y,
-            p,
-            t0,
-        )
+        turb_fluxes = ClimaLand.turbulent_fluxes(canopy.atmos, canopy, Y, p, t0)
         @test p.canopy.hydraulics.fa.:1 == turb_fluxes.vapor_flux
         @test p.canopy.energy.lhf == turb_fluxes.lhf
         @test p.canopy.energy.shf == turb_fluxes.shf
