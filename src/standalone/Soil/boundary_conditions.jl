@@ -662,7 +662,6 @@ boundary_vars(
     ::ClimaLand.TopBoundary,
 ) = (
     :turbulent_fluxes,
-    :ice_frac,
     :R_n,
     :top_bc,
     :sfc_scratch,
@@ -688,7 +687,6 @@ boundary_var_domain_names(
     },
     ::ClimaLand.TopBoundary,
 ) = (
-    :surface,
     :surface,
     :surface,
     :surface,
@@ -721,7 +719,6 @@ boundary_var_types(
         (:lhf, :shf, :vapor_flux_liq, :r_ae, :vapor_flux_ice),
         Tuple{FT, FT, FT, FT, FT},
     },
-    FT,
     FT,
     NamedTuple{(:water, :heat), Tuple{FT, FT}},
     FT,
