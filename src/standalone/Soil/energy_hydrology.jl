@@ -792,32 +792,29 @@ function turbulent_fluxes(
     K_sat_sfc = ClimaLand.Domains.top_center_to_surface(K_sat)
     θ_i_sfc = ClimaLand.Domains.top_center_to_surface(Y.soil.θ_i)
     ν_sfc = ClimaLand.Domains.top_center_to_surface(ν)
-    log10_K_sfc = p.soil.sfc_scratch
-    @. p.soil.K = log10(p.soil.K)
+    θ_r_sfc = ClimaLand.Domains.top_center_to_surface(θ_r)
+    θ_l_sfc = p.soil.sfc_scratch
     ClimaLand.Domains.linear_interpolation_to_surface!(
-        log10_K_sfc,
-        p.soil.K, #temporally the log10(K)
+        θ_l_sfc,
+        p.soil.θ_l,
         model.domain.fields.z,
         model.domain.fields.Δz_top,
     )
-    #    undo log transform
-    @. p.soil.K = 10^p.soil.K
     return soil_turbulent_fluxes_at_a_point.(
         T_sfc,
         h_sfc,
         d_sfc,
+        θ_l_sfc,
         θ_i_sfc,
         hydrology_cm_sfc,
         ν_sfc,
+        θ_r_sfc,
         K_sat_sfc,
-        log10_K_sfc,
         p.drivers.thermal_state,
         u_air,
         h_air,
         atmos.gustiness,
-        model.parameters.z_0m,
-        model.parameters.z_0b,
-        Ref(model.parameters.earth_param_set),
+        model.parameters,
     )
 end
 
@@ -825,27 +822,25 @@ end
     soil_turbulent_fluxes_at_a_point(T_sfc::FT,
                                 h_sfc::FT,
                                 d_sfc::FT,
+                                θ_l_sfc::FT,
                                 θ_i_sfc::FT,
                                 hydrology_cm_sfc,
                                 ν_sfc,
+                                θ_r_sfc,
                                 K_sat_sfc,
-                                log10_K_sfc,
                                 ts_in,
                                 u::FT,
                                 h::FT,
                                 gustiness::FT,
-                                z_0m::FT,
-                                z_0b::FT,
-                                earth_param_set::EP,
-                               ) where {FT <: AbstractFloat, P}
+                                params
+                               ) where {FT <: AbstractFloat}
 
 Computes turbulent surface fluxes for soil at a point on a surface given
 (1) the surface temperature (T_sfc)
 (2) Other surface properties, such as the surface hydraulic conductivity, the surface ice content, 
     and the hydrologic parameters, as well as
-(3) the topographical height of the surface (h_sfc)
-(3) the roughness lengths `z_0m, z_0b`, and the displacement height `d_sfc`.
-(4) the Earth parameter set for the model `earth_params`.
+(3) the topographical height of the surface (h_sfc),  the displacement height `d_sfc`.
+(4) soil scalar parameters contained in `params`
 (5) the prescribed atmospheric state, `ts_in`, u, h the height
     at which these measurements are made, and the gustiness parameter (m/s).
 
@@ -856,19 +851,19 @@ function soil_turbulent_fluxes_at_a_point(
     T_sfc::FT,
     h_sfc::FT,
     d_sfc::FT,
+    θ_l_sfc::FT,
     θ_i_sfc::FT,
     hydrology_cm_sfc,
     ν_sfc,
+    θ_r_sfc,
     K_sat_sfc::FT,
-    log10_K_sfc::FT,
     ts_in,
     u::FT,
     h::FT,
     gustiness::FT,
-    z_0m::FT,
-    z_0b::FT,
-    earth_param_set::EP,
-) where {FT <: AbstractFloat, EP}
+    params,
+) where {FT <: AbstractFloat}
+    (; z_0m, z_0b, Ω, γ, γT_ref, earth_param_set) = params
     thermo_params = LP.thermodynamic_parameters(earth_param_set)
     # Estimate surface air density
     ρ_sfc = ClimaLand.compute_ρ_sfc(thermo_params, ts_in, T_sfc)
@@ -933,7 +928,14 @@ function soil_turbulent_fluxes_at_a_point(
     if q_air > q_sat_liq # condense
         Ẽ = Ẽ0
     else # adjust potential evaporation rate to account for soil resistance
-        K_sfc = FT(10)^log10_K_sfc
+        K_sfc =
+            impedance_factor(θ_i_sfc / (θ_l_sfc + θ_i_sfc - θ_r_sfc), Ω) *
+            viscosity_factor(T_sfc, γ, γT_ref) *
+            hydraulic_conductivity(
+                hydrology_cm_sfc,
+                K_sat_sfc,
+                effective_saturation(ν_sfc, θ_l_sfc, θ_r_sfc),
+            )
         K_c = hydraulic_conductivity(
             hydrology_cm_sfc,
             K_sat_sfc,
