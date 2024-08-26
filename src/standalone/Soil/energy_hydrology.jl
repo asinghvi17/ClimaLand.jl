@@ -824,7 +824,7 @@ end
                                 d_sfc::FT,
                                 θ_l_sfc::FT,
                                 θ_i_sfc::FT,
-                                hydrology_cm_sfc,
+                                hydrology_cm_sfc::C,
                                 ν_sfc,
                                 θ_r_sfc,
                                 K_sat_sfc,
@@ -832,8 +832,8 @@ end
                                 u::FT,
                                 h::FT,
                                 gustiness::FT,
-                                params
-                               ) where {FT <: AbstractFloat}
+                                params, P
+                               ) where {FT <: AbstractFloat, C, P}
 
 Computes turbulent surface fluxes for soil at a point on a surface given
 (1) the surface temperature (T_sfc)
@@ -853,28 +853,28 @@ function soil_turbulent_fluxes_at_a_point(
     d_sfc::FT,
     θ_l_sfc::FT,
     θ_i_sfc::FT,
-    hydrology_cm_sfc,
-    ν_sfc,
-    θ_r_sfc,
+    hydrology_cm_sfc::C,
+    ν_sfc::FT,
+    θ_r_sfc::FT,
     K_sat_sfc::FT,
-    ts_in,
+    ts_in::Thermodynamics.PhaseEquil_ρTq,
     u::FT,
     h::FT,
     gustiness::FT,
-    params,
-) where {FT <: AbstractFloat}
+    params::P,
+) where {FT <: AbstractFloat, C, P}
     (; z_0m, z_0b, Ω, γ, γT_ref, earth_param_set) = params
     thermo_params = LP.thermodynamic_parameters(earth_param_set)
     # Estimate surface air density
-    ρ_sfc = ClimaLand.compute_ρ_sfc(thermo_params, ts_in, T_sfc)
+    ρ_sfc::FT = ClimaLand.compute_ρ_sfc(thermo_params, ts_in, T_sfc)
     # Compute saturated specific humidities at surface over ice and liquid water
-    q_sat_ice = Thermodynamics.q_vap_saturation_generic(
+    q_sat_ice::FT = Thermodynamics.q_vap_saturation_generic(
         thermo_params,
         T_sfc,
         ρ_sfc,
         Thermodynamics.Ice(),
     )
-    q_sat_liq = Thermodynamics.q_vap_saturation_generic(
+    q_sat_liq::FT = Thermodynamics.q_vap_saturation_generic(
         thermo_params,
         T_sfc,
         ρ_sfc,
@@ -882,7 +882,7 @@ function soil_turbulent_fluxes_at_a_point(
     )
 
     # Evaporation:
-    ts_sfc =
+    ts_sfc::Thermodynamics.PhaseEquil_ρTq =
         Thermodynamics.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sat_liq)# use to get potential evaporation E0, r_ae (weak dependence on q).
 
     # SurfaceFluxes.jl expects a relative difference between where u = 0
@@ -919,16 +919,16 @@ function soil_turbulent_fluxes_at_a_point(
     _ρ_liq::FT = LP.ρ_cloud_liq(earth_param_set)
     cp_m::FT = Thermodynamics.cp_m(thermo_params, ts_in)
     T_in::FT = Thermodynamics.air_temperature(thermo_params, ts_in)
-    ΔT = T_in - T_sfc
+    ΔT::FT = T_in - T_sfc
     r_ae_liq::FT = 1 / (conditions.Ch * SurfaceFluxes.windspeed(sc))
     ρ_air::FT = Thermodynamics.air_density(thermo_params, ts_in)
     q_air::FT = Thermodynamics.total_specific_humidity(thermo_params, ts_in)
     E0::FT = SurfaceFluxes.evaporation(surface_flux_params, sc, conditions.Ch)# potential evaporation rate, mass flux
     Ẽ0::FT = E0 / _ρ_liq
     if q_air > q_sat_liq # condense
-        Ẽ = Ẽ0
+        Ẽ::FT = Ẽ0
     else # adjust potential evaporation rate to account for soil resistance
-        K_sfc =
+        K_sfc::FT =
             impedance_factor(θ_i_sfc / (θ_l_sfc + θ_i_sfc - θ_r_sfc), Ω) *
             viscosity_factor(T_sfc, γ, γT_ref) *
             hydraulic_conductivity(
@@ -936,23 +936,23 @@ function soil_turbulent_fluxes_at_a_point(
                 K_sat_sfc,
                 effective_saturation(ν_sfc, θ_l_sfc, θ_r_sfc),
             )
-        K_c = hydraulic_conductivity(
+        K_c::FT = hydraulic_conductivity(
             hydrology_cm_sfc,
             K_sat_sfc,
             hydrology_cm_sfc.S_c,
         )
-        x = 4 * K_sfc * (1 + Ẽ0 / (4 * K_c))
-        Ẽ = Ẽ0 * x / (Ẽ0 + x)
+        x::FT = 4 * K_sfc * (1 + Ẽ0 / (4 * K_c))
+        Ẽ::FT = Ẽ0 * x / (Ẽ0 + x)
     end
-    H_liq = -ρ_air * cp_m * ΔT / r_ae_liq
+    H_liq::FT = -ρ_air * cp_m * ΔT / r_ae_liq
 
     # Sublimation:
     ts_sfc =
         Thermodynamics.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sat_ice)
     if q_air > q_sat_ice # frost
-        β_i = FT(1)
+        β_i::FT = FT(1)
     else
-        β_i = (θ_i_sfc / ν_sfc)^3
+        β_i::FT = (θ_i_sfc / ν_sfc)^3
     end
     state_sfc = SurfaceFluxes.StateValues(FT(0), SVector{2, FT}(0, 0), ts_sfc)
     sc = SurfaceFluxes.ValuesOnly(
@@ -973,17 +973,17 @@ function soil_turbulent_fluxes_at_a_point(
     S̃::FT = S / _ρ_liq
 
     r_ae_ice::FT = 1 / (conditions.Ch * SurfaceFluxes.windspeed(sc))
-    H_ice = -ρ_air * cp_m * ΔT / r_ae_ice
+    H_ice::FT = -ρ_air * cp_m * ΔT / r_ae_ice
 
     # Heat fluxes
-    LH = _LH_v0 * (Ẽ + S̃) * _ρ_liq
-    H = (H_ice + H_liq) / 2
-
+    LH::FT = _LH_v0 * (Ẽ + S̃) * _ρ_liq
+    H::FT = (H_ice + H_liq) / 2
+    r_ae::FT = 2 * r_ae_liq * r_ae_ice / (r_ae_liq + r_ae_ice) # implied by definition of H
     return (
         lhf = LH,
         shf = H,
         vapor_flux_liq = Ẽ,
-        r_ae = 2 * r_ae_liq * r_ae_ice / (r_ae_liq + r_ae_ice), # implied by definition of H
+        r_ae = r_ae,
         vapor_flux_ice = S̃,
     )
 end
