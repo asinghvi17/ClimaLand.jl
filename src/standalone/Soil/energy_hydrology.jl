@@ -857,7 +857,7 @@ function soil_turbulent_fluxes_at_a_point(
     ν_sfc::FT,
     θ_r_sfc::FT,
     K_sat_sfc::FT,
-    ts_in::Thermodynamics.PhaseEquil_ρTq,
+    ts_in::Thermodynamics.PhaseEquil{FT},
     u::FT,
     h::FT,
     gustiness::FT,
@@ -882,7 +882,7 @@ function soil_turbulent_fluxes_at_a_point(
     )
 
     # Evaporation:
-    ts_sfc::Thermodynamics.PhaseEquil_ρTq =
+    ts_sfc::Thermodynamics.PhaseEquil{FT} =
         Thermodynamics.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sat_liq)# use to get potential evaporation E0, r_ae (weak dependence on q).
 
     # SurfaceFluxes.jl expects a relative difference between where u = 0
@@ -925,9 +925,8 @@ function soil_turbulent_fluxes_at_a_point(
     q_air::FT = Thermodynamics.total_specific_humidity(thermo_params, ts_in)
     E0::FT = SurfaceFluxes.evaporation(surface_flux_params, sc, conditions.Ch)# potential evaporation rate, mass flux
     Ẽ0::FT = E0 / _ρ_liq
-    if q_air > q_sat_liq # condense
-        Ẽ::FT = Ẽ0
-    else # adjust potential evaporation rate to account for soil resistance
+    Ẽ::FT = Ẽ0
+    if q_air < q_sat_liq # adjust potential evaporation rate to account for soil resistance
         K_sfc::FT =
             impedance_factor(θ_i_sfc / (θ_l_sfc + θ_i_sfc - θ_r_sfc), Ω) *
             viscosity_factor(T_sfc, γ, γT_ref) *
@@ -942,17 +941,16 @@ function soil_turbulent_fluxes_at_a_point(
             hydrology_cm_sfc.S_c,
         )
         x::FT = 4 * K_sfc * (1 + Ẽ0 / (4 * K_c))
-        Ẽ::FT = Ẽ0 * x / (Ẽ0 + x)
+        Ẽ *= x / (Ẽ0 + x)
     end
     H_liq::FT = -ρ_air * cp_m * ΔT / r_ae_liq
 
     # Sublimation:
     ts_sfc =
         Thermodynamics.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sat_ice)
-    if q_air > q_sat_ice # frost
-        β_i::FT = FT(1)
-    else
-        β_i::FT = (θ_i_sfc / ν_sfc)^3
+    β_i::FT = FT(1)
+    if q_air < q_sat_ice # sublimation, adjust β
+        β_i *= (θ_i_sfc / ν_sfc)^3
     end
     state_sfc = SurfaceFluxes.StateValues(FT(0), SVector{2, FT}(0, 0), ts_sfc)
     sc = SurfaceFluxes.ValuesOnly(
