@@ -814,7 +814,7 @@ function turbulent_fluxes(
         u_air,
         h_air,
         atmos.gustiness,
-        model.parameters,
+        Ref(model.parameters),
     )
 end
 
