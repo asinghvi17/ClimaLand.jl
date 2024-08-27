@@ -4,6 +4,7 @@ using ClimaCore
 using Dates
 using Insolation
 import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput
 
 using ClimaLand

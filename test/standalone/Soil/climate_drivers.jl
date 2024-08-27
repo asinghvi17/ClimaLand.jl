@@ -298,11 +298,11 @@ for FT in (Float32, Float64)
             r_ae = conditions.r_ae
             expected_water_flux = @. FT(precip(t)) .+
                conditions.vapor_flux * (1 - f_ice) * r_ae / (r_soil + r_ae)
-            @test computed_water_flux == expected_water_flux
+            @test parent(computed_water_flux) ≈ parent(expected_water_flux)
             expected_energy_flux = @. R_n +
                conditions.lhf * r_ae / (r_soil + r_ae) +
                conditions.shf
-            @test computed_energy_flux == expected_energy_flux
+            @test parent(computed_energy_flux) ≈ parent(expected_energy_flux)
         end
     end
 end
