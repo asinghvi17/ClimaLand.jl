@@ -786,8 +786,8 @@ function turbulent_fluxes(
     d_sfc = ClimaLand.displacement_height(model, Y, p)
     u_air = p.drivers.u
     h_air = atmos.h
-
-    (; K_sat, ν, θ_r, hydrology_cm) = model.parameters
+    (; K_sat, ν, θ_r, hydrology_cm, z_0m, z_0b, Ω, γ, γT_ref, earth_param_set) =
+        model.parameters
     hydrology_cm_sfc = ClimaLand.Domains.top_center_to_surface(hydrology_cm)
     K_sat_sfc = ClimaLand.Domains.top_center_to_surface(K_sat)
     θ_i_sfc = ClimaLand.Domains.top_center_to_surface(Y.soil.θ_i)
@@ -814,7 +814,12 @@ function turbulent_fluxes(
         u_air,
         h_air,
         atmos.gustiness,
-        model.parameters,
+        z_0m,
+        z_0b,
+        Ω,
+        γ,
+        γT_ref,
+        Ref(earth_param_set),
     )
 end
 
@@ -853,7 +858,7 @@ function soil_turbulent_fluxes_at_a_point(
     d_sfc::FT,
     θ_l_sfc::FT,
     θ_i_sfc::FT,
-    hydrology_cm_sfc::C,
+    hydrology_cm_sfc,
     ν_sfc::FT,
     θ_r_sfc::FT,
     K_sat_sfc::FT,
@@ -861,9 +866,13 @@ function soil_turbulent_fluxes_at_a_point(
     u::FT,
     h::FT,
     gustiness::FT,
-    params::P,
-) where {FT <: AbstractFloat, C, P}
-    (; z_0m, z_0b, Ω, γ, γT_ref, earth_param_set) = params
+    z_0m::FT,
+    z_0b::FT,
+    Ω::FT,
+    γ::FT,
+    γT_ref::FT,
+    earth_param_set::P,
+) where {FT <: AbstractFloat, P}
     thermo_params = LP.thermodynamic_parameters(earth_param_set)
     # Estimate surface air density
     ρ_sfc::FT = ClimaLand.compute_ρ_sfc(thermo_params, ts_in, T_sfc)
