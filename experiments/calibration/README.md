@@ -9,5 +9,5 @@ The structure of this folder currently mimics [ClimaAtmos.jl/calibration](https:
 ## Documentation
 
 To understand the dependencies of our calibration workflow, read the documentation of
-[ClimaCalibrate.jl](https://github.com/CliMA/ClimaCalibrate.jl) and [EnsembleKalmanProcesses].jl(https://github.com/CliMA/EnsembleKalmanProcesses.jl)
+[ClimaCalibrate.jl](https://github.com/CliMA/ClimaCalibrate.jl) and [EnsembleKalmanProcesses.jl](https://github.com/CliMA/EnsembleKalmanProcesses.jl)
 
