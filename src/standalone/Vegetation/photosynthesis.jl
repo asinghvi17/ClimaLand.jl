@@ -27,7 +27,7 @@ Base.@kwdef struct FarquharParameters{
     MECH <: AbstractPhotosynthesisMechanism,
 }
     "Vcmax at 25 °C (mol CO2/m^2/s)"
-    Vcmax25::FT
+    Vcmax25::Union{FT, ClimaCore.Fields.Field}
     "Γstar at 25 °C (mol/mol)"
     Γstar25::FT
     "Michaelis-Menten parameter for CO2 at 25 °C (mol/mol)"
@@ -93,26 +93,23 @@ function photosynthesis_at_a_point_Farquhar(
     c_co2,
     medlyn_factor,
     R,
-    parameters,
+    Vcmax25,
+    Γstar25,
+    ΔHJmax,
+    ΔHVcmax,
+    ΔHΓstar,
+    f,
+    ΔHRd,
+    To,
+    θj,
+    ϕ,
+    mechanism,
+    oi,
+    Kc25,
+    Ko25,
+    ΔHkc,
+    ΔHko,
 )
-    (;
-        Vcmax25,
-        Γstar25,
-        ΔHJmax,
-        ΔHVcmax,
-        ΔHΓstar,
-        f,
-        ΔHRd,
-        To,
-        θj,
-        ϕ,
-        mechanism,
-        oi,
-        Kc25,
-        Ko25,
-        ΔHkc,
-        ΔHko,
-    ) = parameters
     Jmax = max_electron_transport(Vcmax25, ΔHJmax, T, To, R)
     J = electron_transport(APAR, Jmax, θj, ϕ)
     Vcmax = compute_Vcmax(Vcmax25, T, To, R, ΔHVcmax)
@@ -156,8 +153,27 @@ function update_photosynthesis!(
     c_co2,
     R,
 )
-    (; Vcmax25, f, ΔHRd, To) = model.parameters
-
+    (;
+        Vcmax25,
+        f,
+        ΔHRd,
+        To,
+        Γstar25,
+        ΔHJmax,
+        ΔHVcmax,
+        ΔHΓstar,
+        f,
+        ΔHRd,
+        To,
+        θj,
+        ϕ,
+        mechanism,
+        oi,
+        Kc25,
+        Ko25,
+        ΔHkc,
+        ΔHko,
+    ) = model.parameters
     @. Rd = dark_respiration(Vcmax25, β, f, ΔHRd, T, To, R)
     @. An = photosynthesis_at_a_point_Farquhar(
         T,
@@ -167,7 +183,22 @@ function update_photosynthesis!(
         c_co2,
         medlyn_factor,
         R,
-        model.parameters,
+        Vcmax25,
+        Γstar25,
+        ΔHJmax,
+        ΔHVcmax,
+        ΔHΓstar,
+        f,
+        ΔHRd,
+        To,
+        θj,
+        ϕ,
+        mechanism,
+        oi,
+        Kc25,
+        Ko25,
+        ΔHkc,
+        ΔHko,
     )
     Vcmax25field .= Vcmax25
 end

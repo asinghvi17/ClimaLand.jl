@@ -166,6 +166,7 @@ function FarquharParameters(
     parameters = CP.get_parameter_values(toml_dict, name_map, "Land")
     FT = CP.float_type(toml_dict)
     MECH = typeof(mechanism)
+    Vcmax25 = FT.(Vcmax25)
     return FarquharParameters{FT, MECH}(;
         mechanism,
         Vcmax25,
