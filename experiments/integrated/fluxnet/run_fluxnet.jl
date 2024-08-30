@@ -268,6 +268,38 @@ prob = SciMLBase.ODEProblem(
     (t0, tf),
     p,
 );
+
+# ClimaDiagnostics
+using ClimaDiagnostics
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 sol = SciMLBase.solve(
     prob,
     ode_algo;
